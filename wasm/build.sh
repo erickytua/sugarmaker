@@ -38,6 +38,9 @@ CFLAGS="-O3 \
         -fno-threadsafe-statics"
 
 # Emscripten settings
+# Note: Removed deprecated flags -s MINIFY=1, -s AGGRESSIVE_VARIABLE_ELIMINATION=1, 
+# and -s DEAD_FUNCTIONS_ELIMINATION=1 as they are no longer supported in modern emcc.
+# Using -O3 (in CFLAGS) and default optimization instead.
 EMFLAGS="-s WASM=1 \
          -s ALLOW_MEMORY_GROWTH=1 \
          -s MODULARIZE=1 \
@@ -46,9 +49,7 @@ EMFLAGS="-s WASM=1 \
          -s EXPORTED_RUNTIME_METHODS=\"cwrap,getValue,setValue,UTF8ToString,stringToUTF8\" \
          -s NO_FILESYSTEM=1 \
          -s ENVIRONMENT='web,node' \
-         -s MINIFY=1 \
-         -s AGGRESSIVE_VARIABLE_ELIMINATION=1 \
-         -s DEAD_FUNCTIONS_ELIMINATION=1 \
+         -s WASM_BIGINT=1 \
          -s TEXTDECODER=1"
 
 # Output files
