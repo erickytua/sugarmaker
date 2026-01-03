@@ -1,0 +1,26 @@
+# Build output
+dist/
+*.wasm
+*.wast
+*.js.map
+*.js.min
+
+# Node modules
+node_modules/
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.o
+*.a
+*.bc
+.deps/

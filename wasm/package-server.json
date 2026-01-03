@@ -1,0 +1,32 @@
+{
+  "name": "yespower-tidecoin-mining-pool",
+  "version": "1.0.0",
+  "description": "WebSocket mining pool and proxy for YespowerTidecoin WASM miner",
+  "main": "mining-pool-server.js",
+  "scripts": {
+    "start:pool": "node mining-pool-server.js",
+    "start:proxy": "node websocket-proxy-server.js",
+    "test": "node mining-pool-server.js 8080 1000"
+  },
+  "keywords": [
+    "yespower",
+    "tidecoin",
+    "mining",
+    "pool",
+    "websocket",
+    "stratum",
+    "proxy"
+  ],
+  "author": "Sugarmaker Contributors",
+  "license": "GPL-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sugarchain-project/sugarmaker"
+  },
+  "dependencies": {
+    "ws": "^8.0.0"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}

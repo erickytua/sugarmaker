@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YespowerTidecoin Pool Miner - WASM (Web Worker)</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            max-width: 1200px;
+            margin: 40px auto;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #00ff00;
+        }
+        h1 {
+            color: #00ffff;
+            border-bottom: 2px solid #00ffff;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #ffff00;
+            margin-top: 30px;
+        }
+        .section {
+            background: #2a2a2a;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            border: 1px solid #444;
+        }
+        .input-group {
+            margin: 10px 0;
+        }
+        label {
+            display: inline-block;
+            width: 150px;
+            color: #00ffff;
+        }
+        input {
+            background: #1a1a1a;
+            color: #00ff00;
+            border: 1px solid #00ff00;
+            padding: 8px;
+            font-family: inherit;
+            width: 300px;
+        }
+        button {
+            background: #004400;
+            color: #00ff00;
+            border: 2px solid #00ff00;
+            padding: 10px 20px;
+            cursor: pointer;
+            font-family: inherit;
+            margin: 5px;
+        }
+        button:hover {
+            background: #006600;
+        }
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        button.stop {
+            background: #440000;
+            border-color: #ff0000;
+            color: #ff0000;
+        }
+        button.stop:hover {
+            background: #660000;
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+        }
+        .stat-box {
+            background: #1a1a1a;
+            padding: 15px;
+            border: 1px solid #00ffff;
+        }
+        .stat-value {
+            font-size: 24px;
+            color: #00ffff;
+        }
+        .stat-label {
+            font-size: 12px;
+            color: #888;
+        }
+        #log {
+            margin-top: 20px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .log-entry {
+            margin: 5px 0;
+            font-size: 12px;
+        }
+        .log-info { color: #00ffff; }
+        .log-success { color: #00ff00; }
+        .log-error { color: #ff0000; }
+        .log-warning { color: #ffff00; }
+        .status {
+            padding: 5px 10px;
+            border-radius: 3px;
+            display: inline-block;
+        }
+        .status-connected { background: #004400; color: #00ff00; }
+        .status-disconnected { background: #440000; color: #ff0000; }
+        .status-mining { background: #004444; color: #00ffff; }
+        .hash-rate {
+            color: #ffff00;
+            font-weight: bold;
+        }
+        .worker-status {
+            background: #3a3a3a;
+            padding: 10px;
+            margin-top: 10px;
+            border: 1px solid #666;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background: #1a1a1a;
+            border: 1px solid #00ff00;
+            margin-top: 5px;
+        }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #00ff00, #00ffff);
+            transition: width 0.3s ease;
+        }
+    </style>
+</head>
+<body>
+    <h1>YespowerTidecoin Pool Miner - WASM (Web Worker)</h1>
+
+    <!-- Pool Configuration -->
+    <div class="section">
+        <h2>Pool Configuration</h2>
+        <div class="input-group">
+            <label>WebSocket URL:</label>
+            <input type="text" id="wsUrl" value="ws://localhost:8080" placeholder="ws://localhost:8080">
+        </div>
+        <div class="input-group">
+            <label>Wallet Address:</label>
+            <input type="text" id="walletAddress" placeholder="Your TIDE address">
+        </div>
+        <div class="input-group">
+            <label>Worker Name:</label>
+            <input type="text" id="workerName" value="wasm-miner-1" placeholder="Worker name">
+        </div>
+        <div class="input-group">
+            <label>Thread Count:</label>
+            <input type="number" id="threadCount" value="1" min="1" max="4" placeholder="Number of workers">
+        </div>
+        <div>
+            <button id="btn-connect" onclick="connectToPool()">Connect</button>
+            <button id="btn-disconnect" onclick="disconnectFromPool()" class="stop" disabled>Disconnect</button>
+        </div>
+        <div style="margin-top: 10px;">
+            Status: <span id="status" class="status status-disconnected">Disconnected</span>
+        </div>
+    </div>
+
+    <!-- Worker Status -->
+    <div class="section">
+        <h2>Worker Status</h2>
+        <div id="workerStatus" class="worker-status">
+            <div>No active workers</div>
+        </div>
+    </div>
+
+    <!-- Mining Statistics -->
+    <div class="section">
+        <h2>Mining Statistics</h2>
+        <div class="stats">
+            <div class="stat-box">
+                <div class="stat-label">Total Hash Rate</div>
+                <div class="stat-value hash-rate" id="totalHashRate">0 H/s</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-label">Shares Accepted</div>
+                <div class="stat-value" id="sharesAccepted">0</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-label">Shares Rejected</div>
+                <div class="stat-value" id="sharesRejected">0</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-label">Difficulty</div>
+                <div class="stat-value" id="difficulty">0</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-label">Best Share</div>
+                <div class="stat-value" id="bestShare">0</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-label">Uptime</div>
+                <div class="stat-value" id="uptime">0m</div>
+            </div>
+        </div>
+        <div style="margin-top: 15px;">
+            <div class="stat-label">Nonce Range Progress</div>
+            <div class="progress-bar">
+                <div id="nonceProgress" class="progress-fill" style="width: 0%;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Log -->
+    <div class="section">
+        <h2>Log</h2>
+        <pre id="log"></pre>
+    </div>
+
+    <script>
+        // Global state
+        let ws = null;
+        let workers = [];
+        let currentJob = null;
+        let stats = {
+            sharesAccepted: 0,
+            sharesRejected: 0,
+            bestShare: 0,
+            startTime: 0,
+            totalHashes: 0,
+            totalHashRate: 0
+        };
+        let isMining = false;
+        let workerIndex = 0;
+
+        // Connect to pool via WebSocket
+        function connectToPool() {
+            const wsUrl = document.getElementById('wsUrl').value;
+            const walletAddress = document.getElementById('walletAddress').value;
+            const workerName = document.getElementById('workerName').value;
+
+            if (!walletAddress) {
+                log('Please enter wallet address', 'error');
+                return;
+            }
+
+            try {
+                log(`Connecting to ${wsUrl}...`, 'info');
+                ws = new WebSocket(wsUrl);
+
+                ws.onopen = () => {
+                    log('Connected to WebSocket server', 'success');
+                    updateStatus('connected');
+
+                    // Send mining subscribe request
+                    const subscribeMsg = {
+                        id: 1,
+                        method: 'mining.subscribe',
+                        params: [workerName, null]
+                    };
+                    ws.send(JSON.stringify(subscribeMsg));
+                };
+
+                ws.onmessage = (event) => {
+                    const message = JSON.parse(event.data);
+                    handleMessage(message);
+                };
+
+                ws.onerror = (error) => {
+                    log('WebSocket error', 'error');
+                    updateStatus('disconnected');
+                    stopMining();
+                };
+
+                ws.onclose = () => {
+                    log('WebSocket connection closed', 'warning');
+                    updateStatus('disconnected');
+                    stopMining();
+                };
+
+                document.getElementById('btn-connect').disabled = true;
+                document.getElementById('btn-disconnect').disabled = false;
+            } catch (error) {
+                log(`Connection failed: ${error.message}`, 'error');
+            }
+        }
+
+        // Disconnect from pool
+        function disconnectFromPool() {
+            stopMining();
+
+            if (ws) {
+                ws.close();
+                ws = null;
+            }
+
+            document.getElementById('btn-connect').disabled = false;
+            document.getElementById('btn-disconnect').disabled = true;
+        }
+
+        // Handle messages from WebSocket server
+        function handleMessage(message) {
+            log(`Received: ${message.method || 'response'}`, 'info');
+
+            switch (message.method) {
+                case 'mining.notify':
+                    handleNewJob(message.params);
+                    break;
+
+                case 'mining.set_difficulty':
+                    document.getElementById('difficulty').textContent = message.params[0];
+                    log(`Difficulty set to ${message.params[0]}`, 'info');
+                    break;
+
+                case 'block.found':
+                    log(`BLOCK FOUND by ${message.params.miner}: ${message.params.blockHash}`, 'success');
+                    break;
+
+                default:
+                    if (message.result && message.id === 1) {
+                        log('Successfully subscribed to mining', 'success');
+
+                        // Authorize with wallet
+                        const authMsg = {
+                            id: 2,
+                            method: 'mining.authorize',
+                            params: [
+                                document.getElementById('walletAddress').value,
+                                null  // No password
+                            ]
+                        };
+                        ws.send(JSON.stringify(authMsg));
+                    } else if (message.result && message.id === 2) {
+                        log('Authorized successfully', 'success');
+                        startMining();
+                    } else if (message.result && message.result === true) {
+                        // Share accepted
+                        stats.sharesAccepted++;
+                        document.getElementById('sharesAccepted').textContent = stats.sharesAccepted;
+                        log('Share accepted!', 'success');
+                    } else if (message.error) {
+                        log(`Error: ${message.error.message}`, 'error');
+                        stats.sharesRejected++;
+                        document.getElementById('sharesRejected').textContent = stats.sharesRejected;
+                    }
+                    break;
+            }
+        }
+
+        // Handle new mining job
+        function handleNewJob(params) {
+            const jobId = params[0];
+            const prevHash = params[1];
+            const coinbase1 = params[2];
+            const coinbase2 = params[3];
+            const merkleBranch = params[4];
+            const version = params[5];
+            const bits = params[6];
+            const time = params[7];
+            const cleanJobs = params[8];
+
+            currentJob = {
+                id: jobId,
+                prevHash,
+                coinbase1,
+                coinbase2,
+                merkleBranch,
+                version,
+                bits,
+                time,
+                difficulty: document.getElementById('difficulty').textContent
+            };
+
+            log(`New job: ${jobId}`, 'info');
+
+            // Distribute job to all workers
+            distributeJob();
+        }
+
+        // Start mining with workers
+        function startMining() {
+            if (isMining) return;
+
+            const threadCount = parseInt(document.getElementById('threadCount').value) || 1;
+            workerIndex = 0;
+
+            log(`Starting ${threadCount} worker(s)...`, 'success');
+            updateStatus('mining');
+            stats.startTime = Date.now();
+            isMining = true;
+
+            // Create workers
+            for (let i = 0; i < threadCount; i++) {
+                createWorker(i + 1);
+            }
+
+            // Update uptime display
+            setInterval(updateUptime, 1000);
+        }
+
+        // Stop mining
+        function stopMining() {
+            isMining = false;
+            log('Stopping workers...', 'warning');
+            updateStatus('connected');
+
+            // Terminate all workers
+            workers.forEach(worker => {
+                if (worker.instance) {
+                    worker.instance.terminate();
+                }
+            });
+            workers = [];
+
+            updateWorkerStatus();
+        }
+
+        // Create a mining worker
+        function createWorker(workerId) {
+            const worker = {
+                id: workerId,
+                instance: null,
+                stats: {
+                    hashes: 0,
+                    hashRate: 0,
+                    nonce: 0
+                }
+            };
+
+            try {
+                worker.instance = new Worker('mining-worker.js');
+
+                worker.instance.onmessage = (event) => {
+                    handleWorkerMessage(worker, event.data);
+                };
+
+                worker.instance.onerror = (error) => {
+                    log(`Worker ${workerId} error: ${error.message}`, 'error');
+                };
+
+                workers.push(worker);
+
+                // Send initial job
+                if (currentJob) {
+                    worker.instance.postMessage({
+                        type: 'start',
+                        data: currentJob
+                    });
+                }
+
+                updateWorkerStatus();
+                log(`Worker ${workerId} started`, 'success');
+            } catch (error) {
+                log(`Failed to create worker ${workerId}: ${error.message}`, 'error');
+            }
+        }
+
+        // Handle messages from workers
+        function handleWorkerMessage(worker, message) {
+            switch (message.type) {
+                case 'initialized':
+                    log(`Worker ${worker.id} initialized: ${message.version}`, 'success');
+                    break;
+
+                case 'miningStarted':
+                    log(`Worker ${worker.id} mining started`, 'info');
+                    break;
+
+                case 'share':
+                    handleShare(worker, message.data);
+                    break;
+
+                case 'stats':
+                    worker.stats = message.data;
+                    updateWorkerStatus();
+                    break;
+
+                case 'error':
+                    log(`Worker ${worker.id} error: ${message.message}`, 'error');
+                    break;
+
+                default:
+                    break;
+            }
+        }
+
+        // Handle share from worker
+        function handleShare(worker, shareData) {
+            const { nonce, hash, jobId } = shareData;
+
+            // Submit to pool
+            const shareMsg = {
+                id: ++workerIndex,
+                method: 'mining.submit',
+                params: [
+                    document.getElementById('walletAddress').value,
+                    currentJob.id,
+                    nonce.toString(16),
+                    currentJob.time,
+                    null  // No extra nonce
+                ]
+            };
+
+            ws.send(JSON.stringify(shareMsg));
+            log(`Worker ${worker.id} share: ${nonce}`, 'info');
+
+            // Check if this is a best share
+            const shareValue = parseInt(hash.slice(0, 4).reduce((acc, b) => acc * 256 + b, 0).toString(16).slice(-8), 16);
+            if (shareValue > stats.bestShare) {
+                stats.bestShare = shareValue;
+                document.getElementById('bestShare').textContent = stats.bestShare;
+            }
+
+            // Distribute new job to this worker
+            if (currentJob) {
+                worker.instance.postMessage({
+                    type: 'newJob',
+                    data: currentJob
+                });
+            }
+        }
+
+        // Distribute job to all workers
+        function distributeJob() {
+            if (!currentJob || workers.length === 0) return;
+
+            workers.forEach(worker => {
+                if (worker.instance) {
+                    worker.instance.postMessage({
+                        type: 'newJob',
+                        data: currentJob
+                    });
+                }
+            });
+        }
+
+        // Update worker status display
+        function updateWorkerStatus() {
+            const container = document.getElementById('workerStatus');
+
+            if (workers.length === 0) {
+                container.innerHTML = '<div>No active workers</div>';
+                return;
+            }
+
+            let html = '';
+            let totalHashRate = 0;
+
+            workers.forEach(worker => {
+                totalHashRate += worker.stats.hashRate;
+
+                html += `
+                    <div style="margin-bottom: 10px; padding: 5px; background: #2a2a2a; border-left: 3px solid #00ffff;">
+                        <div><strong>Worker ${worker.id}</strong></div>
+                        <div>Hash Rate: ${worker.stats.hashRate} H/s</div>
+                        <div>Nonce: ${worker.stats.currentNonce.toLocaleString()}</div>
+                        <div>Hashes: ${worker.stats.hashes.toLocaleString()}</div>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+            document.getElementById('totalHashRate').textContent = `${totalHashRate} H/s`;
+        }
+
+        // Update uptime display
+        function updateUptime() {
+            if (!isMining) return;
+
+            const elapsed = Math.floor((Date.now() - stats.startTime) / 1000);
+            const minutes = Math.floor(elapsed / 60);
+            const seconds = elapsed % 60;
+            document.getElementById('uptime').textContent = `${minutes}m ${seconds}s`;
+        }
+
+        // Update status display
+        function updateStatus(status) {
+            const statusEl = document.getElementById('status');
+            statusEl.className = 'status';
+
+            switch (status) {
+                case 'connected':
+                    statusEl.classList.add('status-connected');
+                    statusEl.textContent = 'Connected';
+                    break;
+                case 'disconnected':
+                    statusEl.classList.add('status-disconnected');
+                    statusEl.textContent = 'Disconnected';
+                    break;
+                case 'mining':
+                    statusEl.classList.add('status-mining');
+                    statusEl.textContent = 'Mining';
+                    break;
+            }
+        }
+
+        // Log helper
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('log');
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${type}`;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logDiv.appendChild(entry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+
+            // Keep only last 100 entries
+            while (logDiv.children.length > 100) {
+                logDiv.removeChild(logDiv.firstChild);
+            }
+        }
+
+        // Handle share response (update nonce progress)
+        function handleShareResponse(message) {
+            if (message.result === true) {
+                // Share accepted
+                const currentNonce = parseInt(message.params[2], 16);
+                const progress = (currentNonce % 1000000) / 10000;
+                document.getElementById('nonceProgress').style.width = `${progress}%`;
+            }
+        }
+    </script>
+</body>
+</html>
