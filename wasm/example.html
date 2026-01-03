@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YespowerTidecoin WASM - Browser Example</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #00ff00;
+        }
+        h1 {
+            color: #00ffff;
+            border-bottom: 2px solid #00ffff;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #ffff00;
+            margin-top: 30px;
+        }
+        pre {
+            background: #2a2a2a;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            border: 1px solid #444;
+        }
+        .success {
+            color: #00ff00;
+        }
+        .error {
+            color: #ff0000;
+        }
+        .info {
+            color: #00ffff;
+        }
+        button {
+            background: #004400;
+            color: #00ff00;
+            border: 2px solid #00ff00;
+            padding: 10px 20px;
+            cursor: pointer;
+            font-family: inherit;
+            margin: 5px;
+        }
+        button:hover {
+            background: #006600;
+        }
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        #log {
+            margin-top: 20px;
+        }
+        .log-entry {
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>YespowerTidecoin WASM - Browser Example</h1>
+
+    <h2>Module Information</h2>
+    <pre id="module-info">Loading module...</pre>
+
+    <h2>Actions</h2>
+    <button id="btn-hash" onclick="computeHash()">Compute Single Hash</button>
+    <button id="btn-scan" onclick="scanNonce()">Scan for Nonce</button>
+
+    <h2>Log</h2>
+    <pre id="log"></pre>
+
+    <script type="module">
+        let Module = null;
+
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('log');
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logDiv.appendChild(entry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function hexToBytes(hex) {
+            const bytes = new Uint8Array(Math.ceil(hex.length / 2));
+            for (let i = 0; i < bytes.length; i++) {
+                bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
+            }
+            return bytes;
+        }
+
+        function bytesToHex(bytes) {
+            return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+
+        // Load the module
+        async function initModule() {
+            try {
+                log('Loading WASM module...', 'info');
+                Module = await import('./dist/yespower-tidecoin.js');
+                Module = await Module.default();
+
+                // Display module info
+                const version = Module._get_version();
+                const hashSize = Module._get_hash_size();
+                const blockSize = Module._get_block_size();
+
+                const params = new Int32Array(3);
+                Module._get_algorithm_params(
+                    params.byteOffset,
+                    params.byteOffset + 4,
+                    params.byteOffset + 8
+                );
+
+                document.getElementById('module-info').innerHTML = `
+<span class="success">✓ Module loaded successfully!</span>
+
+Version:    ${version}
+Hash size:  ${hashSize} bytes
+Block size: ${blockSize} bytes
+
+Algorithm parameters:
+  Version: ${params[0]}
+  N:       ${params[1]}
+  R:       ${params[2]}
+`;
+
+                log('Module loaded successfully!', 'success');
+                log(`Version: ${version}`, 'info');
+                log(`Hash size: ${hashSize} bytes, Block size: ${blockSize} bytes`, 'info');
+
+                // Enable buttons
+                document.getElementById('btn-hash').disabled = false;
+                document.getElementById('btn-scan').disabled = false;
+            } catch (error) {
+                log(`Failed to load module: ${error.message}`, 'error');
+                console.error(error);
+            }
+        }
+
+        // Compute a single hash
+        window.computeHash = function() {
+            if (!Module) return;
+
+            try {
+                log('Computing single hash...', 'info');
+
+                const exampleBlockHeader = '0100000000000000000000000000000000000000000000000000000000000000000000003ba3edfd7a7b12b27ac72c3e67768f617fc81bc3888a51323a9fb8aa4b1e5e4a29ab5f49ffff001d1dac2b7c';
+
+                const blockPtr = Module._malloc(80);
+                const hashPtr = Module._malloc(32);
+
+                try {
+                    // Convert hex to bytes
+                    const blockBytes = hexToBytes(exampleBlockHeader.padEnd(160, '0'));
+
+                    // Copy block data to WASM memory
+                    for (let i = 0; i < Math.min(blockBytes.length, 80); i++) {
+                        Module.setValue(blockPtr + i, blockBytes[i], 'i8');
+                    }
+
+                    // Compute hash
+                    const startTime = performance.now();
+                    const result = Module._compute_single_hash(blockPtr, hashPtr);
+                    const elapsed = performance.now() - startTime;
+
+                    if (result !== 0) {
+                        throw new Error('Hash computation failed');
+                    }
+
+                    // Read the hash result
+                    const hash = new Uint8Array(32);
+                    for (let i = 0; i < 32; i++) {
+                        hash[i] = Module.getValue(hashPtr + i, 'i8');
+                    }
+
+                    const hashHex = bytesToHex(hash);
+                    log(`Hash computed in ${elapsed.toFixed(2)}ms`, 'success');
+                    log(`Hash: ${hashHex.substring(0, 32)}...`, 'info');
+                } finally {
+                    Module._free(blockPtr);
+                    Module._free(hashPtr);
+                }
+            } catch (error) {
+                log(`Error: ${error.message}`, 'error');
+                console.error(error);
+            }
+        };
+
+        // Scan for a valid nonce
+        window.scanNonce = function() {
+            if (!Module) return;
+
+            try {
+                log('Scanning for nonce (range: 0-10000)...', 'info');
+
+                const blockPtr = Module._malloc(80);
+                const targetPtr = Module._malloc(32);
+
+                try {
+                    // Create example block data
+                    const exampleBlock = new Uint32Array(20);
+                    exampleBlock[0] = 0x01000000; // Version
+
+                    // Copy block data
+                    for (let i = 0; i < 20; i++) {
+                        Module.setValue(blockPtr + (i * 4), exampleBlock[i], 'i32');
+                    }
+
+                    // Create easy target for demonstration
+                    const easyTarget = new Uint32Array(8);
+                    easyTarget[0] = 0x0000ffff; // Very low difficulty
+                    easyTarget[1] = 0xffffffff;
+                    easyTarget[2] = 0xffffffff;
+                    easyTarget[3] = 0xffffffff;
+                    easyTarget[4] = 0xffffffff;
+                    easyTarget[5] = 0xffffffff;
+                    easyTarget[6] = 0xffffffff;
+                    easyTarget[7] = 0xffffffff;
+
+                    // Copy target
+                    for (let i = 0; i < 8; i++) {
+                        Module.setValue(targetPtr + (i * 4), easyTarget[i], 'i32');
+                    }
+
+                    // Scan for nonce
+                    const startTime = performance.now();
+                    const found = Module._scan_tidecoin_hash(
+                        blockPtr, targetPtr, 0, 10000
+                    );
+                    const elapsed = performance.now() - startTime;
+
+                    if (found === 1) {
+                        const foundNonce = Module.getValue(blockPtr + 76, 'i32');
+                        const hashesDone = Module._get_hashes_done();
+                        const hashesPerSecond = Math.round(hashesDone * 1000 / elapsed);
+
+                        log(`Found valid nonce: ${foundNonce}`, 'success');
+                        log(`Hashes: ${hashesDone}, Time: ${elapsed.toFixed(2)}ms`, 'info');
+                        log(`Hash rate: ${hashesPerSecond} H/s`, 'info');
+                    } else if (found === 0) {
+                        const hashesDone = Module._get_hashes_done();
+                        log(`No valid nonce found in range`, 'info');
+                        log(`Hashes computed: ${hashesDone}`, 'info');
+                    } else {
+                        log('Error during nonce scan', 'error');
+                    }
+                } finally {
+                    Module._free(blockPtr);
+                    Module._free(targetPtr);
+                }
+            } catch (error) {
+                log(`Error: ${error.message}`, 'error');
+                console.error(error);
+            }
+        };
+
+        // Initialize on page load
+        window.addEventListener('DOMContentLoaded', initModule);
+
+        // Disable buttons until module loads
+        document.getElementById('btn-hash').disabled = true;
+        document.getElementById('btn-scan').disabled = true;
+    </script>
+</body>
+</html>
