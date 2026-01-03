@@ -3,10 +3,10 @@
  * Removed work_restart dependency for single-threaded operation
  */
 
-#include "../include/cpuminer-config.h"
-#include "../include/miner.h"
+#include "cpuminer-config.h"
+#include "miner.h"
 
-#include "../yespower-1.0.1/yespower.h"
+#include "yespower.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -24,12 +24,12 @@ int scanhash_tidecoin_yespower(int thr_id, uint32_t *pdata,
 		.perslen = 0
 	};
 	union {
-		uint8_t u8[8];
+		uint8_t u8[80];
 		uint32_t u32[20];
 	} data;
 	union {
 		yespower_binary_t yb;
-		uint32_t u32[7];
+		uint32_t u32[8];
 	} hash;
 	uint32_t n = pdata[19] - 1;
 	const uint32_t Htarg = ptarget[7];
