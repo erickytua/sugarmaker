@@ -10,6 +10,7 @@ A minimal, optimized WebAssembly implementation of the YespowerTidecoin hashing 
 - **Small Footprint**: Optimized to be under 2MB for fast loading
 - **Flexible API**: Provides both hash scanning and single hash computation functions
 - **Cross-Platform**: Works in browsers (modern Chrome, Firefox, Safari, Edge) and Node.js
+- **WebSocket Mining Support**: Full support for pool mining via WebSocket (browser-compatible)
 
 ## Build Requirements
 
@@ -331,6 +332,54 @@ The optimized WASM module is designed to be under 2MB. The actual size depends o
 ## License
 
 This module is derived from sugarmaker, which is licensed under the GNU General Public License version 2.0. See the COPYING file in the parent directory for details.
+
+## WebSocket Pool Mining
+
+Since browsers cannot make direct TCP connections to Stratum mining pools, this module includes WebSocket-based pool mining support.
+
+### Quick Start
+
+```bash
+cd wasm
+
+# Install WebSocket server dependencies
+npm install --save-prod ws
+
+# Option 1: Start standalone pool (for testing)
+node mining-pool-server.js 8080 1000
+
+# Option 2: Start WebSocket-to-Stratum proxy (for real pools)
+node websocket-proxy-server.js 8080 "stratum+tcp://pool.example.com:3333"
+
+# Open pool-miner.html in browser
+# For single-threaded: pool-miner.html
+# For multi-threaded: pool-miner-worker.html (recommended)
+```
+
+### Documentation
+
+- **WEBSOCKET_QUICK_START.md** - Quick start guide for WebSocket mining
+- **WEBSOCKET_MINING.md** - Full WebSocket mining documentation
+
+### Files
+
+| File | Purpose |
+|------|---------|
+| `pool-miner.html` | Single-threaded browser pool miner |
+| `pool-miner-worker.html` | Multi-threaded browser pool miner (Web Workers) |
+| `mining-worker.js` | Web Worker implementation |
+| `mining-pool-server.js` | Standalone pool server for testing |
+| `websocket-proxy-server.js` | WebSocket-to-Stratum proxy |
+| `package-server.json` | Server dependencies |
+
+### Features
+
+- **WebSocket Protocol**: Browser-compatible WebSocket connections
+- **Pool Integration**: Connect to real Stratum pools via proxy
+- **Multi-threaded Mining**: Web Workers for parallel hashing
+- **Share Submission**: Automatic share submission and validation
+- **Difficulty Management**: Dynamic difficulty adjustment
+- **Statistics**: Real-time hash rate and share tracking
 
 ## Contributing
 
